@@ -1,3 +1,5 @@
+// MplayerScreen.js
+
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -8,20 +10,18 @@ import {
   SafeAreaView,
   Alert,
 } from "react-native";
-import { useNavigation, useRoute } from "@react-navigation/native";
 import { AntDesign } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Slider from "@react-native-community/slider";
+import { useNavigation } from "@react-navigation/native";
 
 const MplayerScreen = () => {
   const navigation = useNavigation();
-  const route = useRoute();
-  const { track } = route.params;
   const [accessToken, setAccessToken] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sliderValue, setSliderValue] = useState(0);
   const [songDuration, setSongDuration] = useState(0);
-  const [currentTrack, setCurrentTrack] = useState(track);
+  const [currentTrack, setCurrentTrack] = useState(null);
 
   useEffect(() => {
     const fetchAccessToken = async () => {
@@ -52,16 +52,21 @@ const MplayerScreen = () => {
 
         if (response.ok) {
           const data = await response.json();
-          setSongDuration(data.item.duration_ms);
-          setIsPlaying(data.is_playing);
-          setSliderValue(data.progress_ms);
-          setCurrentTrack(data.item);
+          if (data.item) {
+            setSongDuration(data.item.duration_ms);
+            setIsPlaying(data.is_playing);
+            setSliderValue(data.progress_ms);
+            setCurrentTrack(data.item);
+          }
         } else if (response.status === 401) {
           console.log("Access token expired. Refreshing token...");
           await refreshAccessToken();
           await fetchCurrentPlayback();
         } else {
-          console.error("Failed to fetch current playback:", response.status);
+          console.error(
+            "Failed to fetch current playback:",
+            response.status
+          );
           Alert.alert("Error", "Failed to fetch current playback.");
         }
       } catch (error) {
@@ -186,12 +191,12 @@ const MplayerScreen = () => {
     }
   };
 
-  const fetchRandomTrack = async () => {
+  const handleNextTrackPress = async () => {
     try {
       const response = await fetch(
-        "https://api.spotify.com/v1/me/player/recommendations?limit=1",
+        "https://api.spotify.com/v1/me/player/next",
         {
-          method: "GET",
+          method: "POST",
           headers: {
             Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
@@ -200,39 +205,22 @@ const MplayerScreen = () => {
       );
 
       if (response.ok) {
-        const data = await response.json();
-        if (data.tracks.length > 0) {
-          setCurrentTrack(data.tracks[0]);
-        } else {
-          console.error("No random track found:", response.status);
-          Alert.alert("Error", "No random track found.");
-        }
+        console.log("Playback moved to next track successfully.");
       } else {
-        const errorMessage = await response.text();
         console.error(
-          "Failed to fetch random track:",
+          "Failed to move playback to next track:",
           response.status,
-          errorMessage
+          await response.text()
         );
-        Alert.alert("Error", "Failed to fetch random track.");
+        Alert.alert("Error", "Failed to move playback to next track.");
       }
     } catch (error) {
-      console.error("Error fetching random track:", error);
-      Alert.alert("Error", "Failed to fetch random track.");
+      console.error("Error moving playback to next track:", error);
+      Alert.alert("Error", "Failed to move playback to next track.");
     }
   };
 
-  const playNextTrack = async () => {
-    try {
-      await fetchRandomTrack();
-      await startPlayback();
-    } catch (error) {
-      console.error("Error playing next track:", error);
-      Alert.alert("Error", "Failed to play next track.");
-    }
-  };
-
-  const playPreviousTrack = async () => {
+  const handlePreviousTrackPress = async () => {
     try {
       const response = await fetch(
         "https://api.spotify.com/v1/me/player/previous",
@@ -248,163 +236,169 @@ const MplayerScreen = () => {
       if (response.ok) {
         console.log("Playback moved to previous track successfully.");
       } else {
-        const errorMessage = await response.text();
         console.error(
-          "Failed to play previous track:",
-          response.status,
-          errorMessage
-        );
-        Alert.alert("Error", "Failed to play previous track.");
-      }
-    } catch (error) {
-      console.error("Error playing previous track:", error);
-      Alert.alert("Error", "Failed to play previous track.");
-    }
-  };
-
-  const onSliderValueChange = async (value) => {
-    setSliderValue(value);
-    if (isPlaying) {
-      try {
-        const response = await fetch(
-          "https://api.spotify.com/v1/me/player/seek",
-          {
-            method: "PUT",
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              position_ms: value,
-            }),
-          }
-        );
-
-        if (!response.ok) {
-          console.error("Failed to control track position:", response.status);
-          Alert.alert("Error", "Failed to control track position.");
+            "Failed to move playback to previous track:",
+            response.status,
+            await response.text()
+          );
+          Alert.alert("Error", "Failed to move playback to previous track.");
         }
       } catch (error) {
-        console.error("Error controlling track position:", error);
-        Alert.alert("Error", "Failed to control track position.");
+        console.error("Error moving playback to previous track:", error);
+        Alert.alert("Error", "Failed to move playback to previous track.");
       }
-    }
+    };
+  
+    const onSliderValueChange = async (value) => {
+      setSliderValue(value);
+      if (isPlaying) {
+        try {
+          const response = await fetch(
+            "https://api.spotify.com/v1/me/player/seek",
+            {
+              method: "PUT",
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                position_ms: value,
+              }),
+            }
+          );
+  
+          if (!response.ok) {
+            console.error(
+              "Failed to control track position:",
+              response.status
+            );
+            Alert.alert("Error", "Failed to control track position.");
+          }
+        } catch (error) {
+          console.error("Error controlling track position:", error);
+          Alert.alert("Error", "Failed to control track position.");
+        }
+      }
+    };
+  
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.screen}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <AntDesign name="left" size={30} color="white" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Music Player</Text>
+          {currentTrack && (
+            <>
+              <View style={styles.trackImageContainer}>
+                <Image
+                  source={{ uri: currentTrack.album.images[0].url }}
+                  style={styles.trackImage}
+                />
+              </View>
+              <View style={styles.trackInfoContainer}>
+                <Text style={styles.trackName}>{currentTrack.name}</Text>
+                <Text style={styles.trackArtists}>
+                  {currentTrack.artists.map((artist) => artist.name).join(", ")}
+                </Text>
+              </View>
+              <View style={styles.sliderContainer}>
+                <Slider
+                  style={{ width: "100%", alignSelf: "center", marginTop: 20 }}
+                  minimumValue={0}
+                  maximumValue={songDuration}
+                  value={sliderValue}
+                  onValueChange={onSliderValueChange}
+                  minimumTrackTintColor="white"
+                  maximumTrackTintColor="white"
+                />
+              </View>
+              <View style={styles.controlsContainer}>
+                <TouchableOpacity onPress={handlePreviousTrackPress}>
+                  <AntDesign name="banckward" size={35} color="white" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={togglePlayback}>
+                  <AntDesign
+                    name={isPlaying ? "pausecircle" : "play"}
+                    size={45}
+                    color="white"
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleNextTrackPress}>
+                  <AntDesign name="forward" size={35} color="white" />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </SafeAreaView>
+    );
   };
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.screen}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <AntDesign name="left" size={30} color="white" />
-        </TouchableOpacity>
-        <Text style={styles.title}>Music Player</Text>
-        <View style={styles.trackImageContainer}>
-          <Image
-            source={{ uri: currentTrack.album.images[0].url }}
-            style={styles.trackImage}
-          />
-        </View>
-        <View style={styles.trackInfoContainer}>
-          <Text style={styles.trackName}>{currentTrack.name}</Text>
-          <Text style={styles.trackArtists}>
-            {currentTrack.artists.map((artist) => artist.name).join(", ")}
-          </Text>
-        </View>
-        <View style={styles.sliderContainer}>
-          <Slider
-            style={{ width: "100%", alignSelf: "center", marginTop: 20 }}
-            minimumValue={0}
-            maximumValue={songDuration}
-            value={sliderValue}
-            onValueChange={onSliderValueChange}
-            minimumTrackTintColor="white"
-            maximumTrackTintColor="white"
-          />
-        </View>
-        <View style={styles.controlsContainer}>
-          <TouchableOpacity onPress={playPreviousTrack}>
-            <AntDesign name="banckward" size={35} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={togglePlayback}>
-            <AntDesign
-              name={isPlaying ? "pausecircle" : "play"}
-              size={45}
-              color="white"
-            />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={playNextTrack}>
-            <AntDesign name="forward" size={35} color="white" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </SafeAreaView>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "black",
-  },
-  screen: {
-    flex: 1,
-    padding: 20,
-  },
-  backButton: {
-    position: "absolute",
-    top: 20,
-    left: 20,
-    zIndex: 1,
-  },
-  title: {
-    color: "white",
-    fontSize: 30,
-    fontWeight: "bold",
-    marginBottom: 30,
-    textAlign: "center",
-  },
-  trackImageContainer: {
-    alignItems: "center",
-  },
-  trackImage: {
-    aspectRatio: 1,
-    width: "100%",
-    maxWidth: 350,
-    height: undefined,
-  },
-  trackInfoContainer: {
-    alignItems: "flex-start",
-    marginLeft: 15,
-    marginTop: 30,
-    marginBottom: 30,
-    height: 110,
-  },
-  trackName: {
-    color: "white",
-    fontSize: 25,
-    fontWeight: "600",
-    marginBottom: 10,
-  },
-  trackArtists: {
-    color: "lightgray",
-    fontSize: 20,
-    height: 50,
-  },
-  sliderContainer: {
-    alignItems: "center",
-    marginBottom: 50,
-  },
-  controlsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    width: "85%",
-    alignSelf: "center",
-    position: "relative",
-    alignItems: "center",
-  },
-});
-
-export default MplayerScreen;
+  
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: "black",
+    },
+    screen: {
+      flex: 1,
+      padding: 20,
+    },
+    backButton: {
+      position: "absolute",
+      top: 20,
+      left: 20,
+      zIndex: 1,
+    },
+    title: {
+      color: "white",
+      fontSize: 30,
+      fontWeight: "bold",
+      marginBottom: 30,
+      textAlign: "center",
+    },
+    trackImageContainer: {
+      alignItems: "center",
+    },
+    trackImage: {
+      aspectRatio: 1,
+      width: "100%",
+      maxWidth: 350,
+      height: undefined,
+    },
+    trackInfoContainer: {
+      alignItems: "flex-start",
+      marginLeft: 15,
+      marginTop: 30,
+      marginBottom: 30,
+      height: 110,
+    },
+    trackName: {
+      color: "white",
+      fontSize: 25,
+      fontWeight: "600",
+      marginBottom: 10,
+    },
+    trackArtists: {
+      color: "lightgray",
+      fontSize: 20,
+      height: 50,
+    },
+    sliderContainer: {
+      alignItems: "center",
+      marginBottom: 50,
+    },
+    controlsContainer: {
+      flexDirection: "row",
+      justifyContent: "space-around",
+      width: "85%",
+      alignSelf: "center",
+      position: "relative",
+      alignItems: "center",
+    },
+  });
+  
+  export default MplayerScreen;  

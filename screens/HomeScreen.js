@@ -53,7 +53,18 @@ const HomeScreen = () => {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to fetch top tracks");
+        if (response.status === 401) {
+          console.log("Access token expired. Refreshing token...");
+          await refreshAccessToken();
+          const newToken = await AsyncStorage.getItem("accessToken");
+          if (newToken) {
+            fetchTopTracks(newToken);
+          } else {
+            navigation.navigate("Login");
+          }
+        } else {
+          throw new Error("Failed to fetch top tracks");
+        }
       }
 
       const data = await response.json();
@@ -84,7 +95,7 @@ const HomeScreen = () => {
 
       if (response.ok) {
         console.log("Successfully started playback of the selected track.");
-        navigation.navigate("Player", { track }); 
+        navigation.navigate("Player", { track });
       } else {
         console.error("Failed to start playback:", response.status);
         Alert.alert("Error", "Failed to start playback.");
