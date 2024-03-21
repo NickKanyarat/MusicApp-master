@@ -1,68 +1,193 @@
-import { Button, StyleSheet, Text, View } from "react-native";
-import React, { useState } from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
+import React, { useState, useEffect } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Alert,
+  StyleSheet,
+  PermissionsAndroid,
+  Platform,
+  SafeAreaView,
+  FlatList,
+} from "react-native";
 import { Audio } from "expo-av";
-import axios from 'axios';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const MicScreen = () => {
-  const [recording, setRecording] = useState();
-  const [permissionResponse, requestPermission] = Audio.usePermissions();
+  const [recording, setRecording] = useState(null);
+  const [audioPermission, setAudioPermission] = useState(null);
+  const [sound, setSound] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingUri, setRecordingUri] = useState(null);
+  const [recordedAudioURIs, setRecordedAudioURIs] = useState([]);
 
-  async function startRecording() {
-    try {
-      if (permissionResponse.status !== "granted") {
-        console.log("Requesting permission..");
-        await requestPermission();
+  useEffect(() => {
+    const requestMicPermission = async () => {
+      try {
+        if (Platform.OS === "android") {
+          const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+            {
+              title: "Microphone Permission",
+              message: "This app needs access to your microphone.",
+              buttonNeutral: "Ask Me Later",
+              buttonNegative: "Cancel",
+              buttonPositive: "OK",
+            }
+          );
+          if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            console.log("Microphone permission granted");
+            setAudioPermission(true);
+          } else {
+            console.log("Microphone permission denied");
+            setAudioPermission(false);
+          }
+        } else {
+          const { status } = await Audio.requestPermissionsAsync();
+          setAudioPermission(status === "granted");
+        }
+      } catch (err) {
+        console.warn(err);
       }
+    };
 
-      console.log("Starting recording..");
-      const recordingObject = new Audio.Recording();
-      await recordingObject.prepareToRecordAsync(Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY);
-      await recordingObject.startAsync();
-      setRecording(recordingObject);
-      console.log("Recording started");
-    } catch (err) {
-      console.error("Failed to start recording", err);
-    }
-  }
+    requestMicPermission();
+    getRecordedAudioURIs();
+  }, []);
 
-  async function stopRecording() {
+  const getRecordedAudioURIs = async () => {
     try {
-      console.log("Stopping recording..");
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      console.log("Recording stopped and stored at", uri);
-      setRecording(undefined);
-
-      // เรียกใช้ฟังก์ชันเพื่อตรวจสอบไฟล์เสียง
-      checkAudioFileExistence(uri);
-    } catch (err) {
-      console.error("Failed to stop recording", err);
-    }
-  }
-
-  async function checkAudioFileExistence(uri) {
-    try {
-      const response = await axios.head(uri);
-      if (response.status === 200) {
-        console.log("Audio file exists");
-      } else {
-        console.log("Audio file does not exist");
+      let uris = await AsyncStorage.getItem("recordedAudioURI");
+      if (uris) {
+        uris = JSON.parse(uris);
+        uris = uris.filter((item) => item && item.uri && item.date);
+        uris.sort((a, b) => b.date - a.date);
+        const latest2URIs = uris.slice(0, 2);
+        setRecordedAudioURIs(latest2URIs);
       }
     } catch (error) {
-      console.error("Error checking audio file existence:", error);
+      console.error("Error retrieving recorded audio URIs:", error);
+      Alert.alert("Error", "Failed to retrieve recorded audio URIs.");
     }
-  }
+  };
+
+  const startRecording = async () => {
+    try {
+      if (!audioPermission) {
+        Alert.alert(
+          "Permission Denied",
+          "Please grant permission to record audio."
+        );
+        return;
+      }
+
+      const recordingObject = new Audio.Recording();
+      await recordingObject.prepareToRecordAsync(
+        Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
+      );
+      await recordingObject.startAsync();
+      setRecording(recordingObject);
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Failed to start recording:", error);
+      Alert.alert("Error", "Failed to start recording.");
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      if (recording) {
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        setRecordingUri(uri);
+        setIsRecording(false);
+        saveRecordedAudioURI(uri);
+        getRecordedAudioURIs();
+      } else {
+        console.warn("No recording to stop.");
+      }
+    } catch (error) {
+      console.error("Failed to stop recording:", error);
+      Alert.alert("Error", "Failed to stop recording.");
+    }
+  };
+
+  const saveRecordedAudioURI = async (uri) => {
+    try {
+      let recordedAudios = await AsyncStorage.getItem("recordedAudioURI");
+      if (!recordedAudios) {
+        recordedAudios = [];
+      } else {
+        recordedAudios = JSON.parse(recordedAudios);
+      }
+      recordedAudios.push({ uri, date: Date.now() });
+      await AsyncStorage.setItem(
+        "recordedAudioURI",
+        JSON.stringify(recordedAudios)
+      );
+    } catch (error) {
+      console.error("Error saving recorded audio URI:", error);
+      Alert.alert("Error", "Failed to save recorded audio.");
+    }
+  };
+
+  const playSound = async (uri) => {
+    try {
+      if (!uri) {
+        Alert.alert("Error", "No recorded audio available.");
+        return;
+      }
+
+      const { sound } = await Audio.Sound.createAsync({ uri });
+      if (!sound) {
+        Alert.alert("Error", "Failed to create sound.");
+        return;
+      }
+
+      setSound(sound);
+      const status = await sound.getStatusAsync();
+      if (status.isLoaded) {
+        await sound.playAsync();
+      } else {
+        Alert.alert("Error", "Sound is not loaded.");
+      }
+    } catch (error) {
+      console.error("Failed to play sound:", error);
+      Alert.alert("Error", "Failed to play sound.");
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.viewScreen}>
-        <Text style={styles.titleText}>MICROPHONE</Text>
-        <View style={styles.button}>
-          <Button
-            title={recording ? "Stop Recording" : "Start Recording"}
-            onPress={recording ? stopRecording : startRecording}
-            color="purple"
+      <View style={styles.screen}>
+        <Text style={styles.title}>Microphone</Text>
+        <View style={styles.content}>
+          <TouchableOpacity
+            style={[
+              styles.button,
+              { backgroundColor: isRecording ? "red" : "green" },
+            ]}
+            onPress={isRecording ? stopRecording : startRecording}
+          >
+            <Text style={styles.buttonText}>
+              {isRecording ? "Stop Recording" : "Start Recording"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.fileContainer}>
+          <FlatList
+            data={recordedAudioURIs}
+            renderItem={({ item, index }) => (
+              <TouchableOpacity
+                style={styles.button}
+                onPress={() => playSound(item.uri)}
+              >
+                <Text style={styles.buttonText}>
+                  {`Play Sound ${index + 1}`}
+                </Text>
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item, index) => index.toString()}
           />
         </View>
       </View>
@@ -75,20 +200,38 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "black",
   },
-  viewScreen: {
-    marginHorizontal: 20,
-    marginVertical: 20,
+  screen: {
+    flex: 1,
+    padding: 20,
+    marginTop: 20,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  titleText: {
+  title: {
     color: "white",
     fontSize: 30,
     fontWeight: "bold",
-    textAlign: "center",
+    marginBottom: 20,
+  },
+  content: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   button: {
-    marginHorizontal: 50,
-    marginVertical: 50,
-    padding: 50,
+    backgroundColor: "blue",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginVertical: 10,
+    borderRadius: 5,
+  },
+  buttonText: {
+    color: "white",
+    fontSize: 18,
+  },
+  fileContainer: {
+    flex: 1,
+    alignItems: "center",
   },
 });
 
