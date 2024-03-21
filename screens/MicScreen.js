@@ -69,7 +69,7 @@ const MicScreen = () => {
       console.error("Error retrieving recorded audio URIs:", error);
       Alert.alert("Error", "Failed to retrieve recorded audio URIs.");
     }
-  };
+  };  
 
   const startRecording = async () => {
     try {
@@ -182,9 +182,7 @@ const MicScreen = () => {
                 style={styles.button}
                 onPress={() => playSound(item.uri)}
               >
-                <Text style={styles.buttonText}>
-                  {`Play Sound ${index + 1}`}
-                </Text>
+                <Text style={styles.buttonText}>{`Sound ${index + 1}`}</Text>
               </TouchableOpacity>
             )}
             keyExtractor={(item, index) => index.toString()}

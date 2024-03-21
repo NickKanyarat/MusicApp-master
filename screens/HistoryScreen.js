@@ -72,14 +72,6 @@ const HistoryScreen = () => {
     }
   };
 
-  useEffect(() => {
-    if (recordedAudios.length > 0) {
-      setRecentRecording(recordedAudios[recordedAudios.length - 1]);
-    } else {
-      setRecentRecording(null);
-    }
-  }, [recordedAudios]);
-
   const renderItem = ({ item }) => (
     <View style={styles.songItem}>
       <Image
@@ -105,11 +97,6 @@ const HistoryScreen = () => {
         />
         <View style={styles.recentContainer}>
           <Text style={styles.title}>Recent song humming</Text>
-          {recentRecording && (
-            <TouchableOpacity onPress={() => Linking.openURL(recentRecording)}>
-              <Image source={{ uri: recentRecording }} style={styles.albumImage} />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
     </SafeAreaView>
@@ -165,3 +152,4 @@ const styles = StyleSheet.create({
 });
 
 export default HistoryScreen;
+
