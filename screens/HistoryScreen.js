@@ -96,7 +96,7 @@ const HistoryScreen = () => {
           contentContainerStyle={styles.content}
         />
         <View style={styles.recentContainer}>
-          <Text style={styles.title}>Recent song humming</Text>
+          
         </View>
       </View>
     </SafeAreaView>

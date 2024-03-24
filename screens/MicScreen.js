@@ -62,7 +62,7 @@ const MicScreen = () => {
         uris = JSON.parse(uris);
         uris = uris.filter((item) => item && item.uri && item.date);
         uris.sort((a, b) => b.date - a.date);
-        const latest2URIs = uris.slice(0, 2);
+        const latest2URIs = uris.slice(0, 1);
         setRecordedAudioURIs(latest2URIs);
       }
     } catch (error) {

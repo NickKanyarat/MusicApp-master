@@ -190,64 +190,6 @@ const MplayerScreen = () => {
       throw error;
     }
   };
-
-  const handleNextTrackPress = async () => {
-    try {
-      const response = await fetch(
-        "https://api.spotify.com/v1/me/player/next",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (response.ok) {
-        console.log("Playback moved to next track successfully.");
-      } else {
-        console.error(
-          "Failed to move playback to next track:",
-          response.status,
-          await response.text()
-        );
-        Alert.alert("Error", "Failed to move playback to next track.");
-      }
-    } catch (error) {
-      console.error("Error moving playback to next track:", error);
-      Alert.alert("Error", "Failed to move playback to next track.");
-    }
-  };
-
-  const handlePreviousTrackPress = async () => {
-    try {
-      const response = await fetch(
-        "https://api.spotify.com/v1/me/player/previous",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      if (response.ok) {
-        console.log("Playback moved to previous track successfully.");
-      } else {
-        console.error(
-            "Failed to move playback to previous track:",
-            response.status,
-            await response.text()
-          );
-          Alert.alert("Error", "Failed to move playback to previous track.");
-        }
-      } catch (error) {
-        console.error("Error moving playback to previous track:", error);
-        Alert.alert("Error", "Failed to move playback to previous track.");
-      }
-    };
   
     const onSliderValueChange = async (value) => {
       setSliderValue(value);
@@ -317,18 +259,12 @@ const MplayerScreen = () => {
                 />
               </View>
               <View style={styles.controlsContainer}>
-                <TouchableOpacity onPress={handlePreviousTrackPress}>
-                  <AntDesign name="banckward" size={35} color="white" />
-                </TouchableOpacity>
                 <TouchableOpacity onPress={togglePlayback}>
                   <AntDesign
                     name={isPlaying ? "pausecircle" : "play"}
                     size={45}
                     color="white"
                   />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleNextTrackPress}>
-                  <AntDesign name="forward" size={35} color="white" />
                 </TouchableOpacity>
               </View>
             </>
